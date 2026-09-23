@@ -23,6 +23,8 @@ export const CATEGORY_META = {
   divrest:   { label: "Geteilt mit Rest", icon: "🔟", short: "Rest" },
   gleichung: { label: "Gleichungen & Ungleichungen", icon: "🔍", short: "Gleichungen" },
   sachaufgabe: { label: "Sachaufgaben", icon: "📖", short: "Sachaufgaben" },
+  zahlenmauer: { label: "Zahlenmauern", icon: "🧱", short: "Zahlenmauern" },
+  malhaus: { label: "Malhäuser", icon: "🏠", short: "Malhäuser" },
 };
 
 let uid = 1;
@@ -256,6 +258,54 @@ export function genUngleichung() {
   ], { inputType: "choice", options: ["<", ">", "="] });
 }
 
+// ---------- Zusatz: Zahlenmauer (nicht Teil der Prüfungssimulation) ----------
+// Immer top + ein Mittelstein + der angrenzende untere Stein bekannt, gelöst wird
+// per einfacher Subtraktion von oben nach unten — ein einziges, immer eindeutig
+// lösbares Muster (keine Sonderfälle, die verwirren könnten).
+export function genZahlenmauer(opts = {}) {
+  let b1, b2, b3, m1, m2, top;
+  do {
+    b2 = randInt(4, 26);
+    b1 = randInt(4, 35);
+    b3 = randInt(4, 35);
+    m1 = b1 + b2;
+    m2 = b2 + b3;
+    top = m1 + m2;
+  } while (top > 100 || top < 30 || m1 > 99 || m2 > 99);
+
+  const side = opts.side || pick(["left", "right"]);
+  const cells = { top, midLeft: m1, midRight: m2, botLeft: b1, botMid: b2, botRight: b3 };
+  const knownKeys = side === "right" ? ["top", "midRight", "botRight"] : ["top", "midLeft", "botLeft"];
+  const unknownKeys = side === "right" ? ["botMid", "midLeft", "botLeft"] : ["botMid", "midRight", "botRight"];
+  const steps = side === "right"
+    ? [
+        `Unten Mitte: ${m2} - ${b3} = ${b2}`,
+        `Mitte links: ${top} - ${m2} = ${m1}`,
+        `Unten links: ${m1} - ${b2} = ${b1}`,
+      ]
+    : [
+        `Unten Mitte: ${m1} - ${b1} = ${b2}`,
+        `Mitte rechts: ${top} - ${m1} = ${m2}`,
+        `Unten rechts: ${m2} - ${b2} = ${b3}`,
+      ];
+  const answer = {}; unknownKeys.forEach(k => { answer[k] = cells[k]; });
+  return task("zahlenmauer", "Fülle die Zahlenmauer aus.", answer, steps, {
+    inputType: "pyramid", cells, knownKeys, unknownKeys,
+  });
+}
+
+// ---------- Zusatz: Malhaus (Einmaleins-Tabelle, nicht Teil der Prüfungssimulation) ----------
+export function genMalhaus() {
+  const m = randInt(2, 10);
+  const pool = shuffle([2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  const factors = pool.slice(0, 4).sort((a, b) => a - b);
+  const products = factors.map(f => f * m);
+  const steps = factors.map((f, i) => `${f} · ${m} = ${products[i]}`);
+  return task("malhaus", `Fülle das Malhaus aus.`, products, steps, {
+    inputType: "malhaus", m, factors,
+  });
+}
+
 // ---------- 7. Sachaufgaben ----------
 const NAMES = ["Lena", "Finn", "Mia", "Leon", "Emma", "Noah", "Ada", "Paul"];
 const SACHAUFGABEN = [
@@ -354,13 +404,22 @@ export function generateTask(category) {
     case "divrest": return genDivRest();
     case "gleichung": return Math.random() < 0.4 ? genUngleichung() : genGleichung();
     case "sachaufgabe": return genSachaufgabe();
+    case "zahlenmauer": return genZahlenmauer();
+    case "malhaus": return genMalhaus();
     default: throw new Error("unknown category " + category);
   }
 }
 
 export function checkAnswer(t, userAnswer) {
-  if (t.inputType === "divrest" || (t.answer && typeof t.answer === "object")) {
+  if (t.inputType === "divrest") {
     return Number(userAnswer.quotient) === t.answer.quotient && Number(userAnswer.rest) === t.answer.rest;
+  }
+  if (t.inputType === "pyramid") {
+    return t.unknownKeys.every(k => Number(userAnswer[k]) === t.answer[k]);
+  }
+  if (t.inputType === "malhaus") {
+    return Array.isArray(userAnswer) && userAnswer.length === t.answer.length &&
+      userAnswer.every((v, i) => Number(v) === t.answer[i]);
   }
   if (typeof t.answer === "string") {
     return String(userAnswer).trim() === t.answer;

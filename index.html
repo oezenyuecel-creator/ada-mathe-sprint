@@ -166,6 +166,27 @@
   }
   .choice-btn.selected{ border-color:var(--ink); background:var(--paper-alt); }
 
+  /* Zahlenmauer */
+  .pyramid{ display:flex; flex-direction:column; align-items:center; gap:8px; margin:18px 0 6px; }
+  .pyramid-row{ display:flex; gap:8px; }
+  .brick{ width:56px; height:56px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-family:'Space Mono',monospace; font-weight:700; font-size:1.05rem; }
+  .brick.known{ background:var(--paper-alt); color:var(--ink-strong); border:2px solid var(--border); }
+  .brick input{ width:100%; height:100%; border-radius:10px; border:2px solid var(--border); background:var(--surface); text-align:center; font-family:'Space Mono',monospace; font-weight:700; font-size:1.05rem; color:var(--ink-strong); }
+  .brick input:focus{ outline:none; border-color:var(--ink); }
+
+  /* Malhaus */
+  .malhaus-roof{ width:112px; height:64px; margin:16px auto 0; background:var(--ink); clip-path:polygon(50% 0%,0% 100%,100% 100%); display:flex; align-items:flex-end; justify-content:center; padding-bottom:10px; }
+  .malhaus-roof span{ color:#fff; font-family:'Space Mono',monospace; font-weight:700; font-size:1.1rem; }
+  .malhaus-table{ width:180px; margin:0 auto; border:2px solid var(--border); border-top:none; border-radius:0 0 12px 12px; overflow:hidden; }
+  .malhaus-row{ display:flex; }
+  .malhaus-row + .malhaus-row{ border-top:1px solid var(--border); }
+  .malhaus-cell{ flex:1; padding:9px 4px; text-align:center; font-family:'Space Mono',monospace; font-weight:700; font-size:1rem; display:flex; align-items:center; justify-content:center; }
+  .malhaus-cell.factor{ background:var(--paper-alt); border-right:1px solid var(--border); color:var(--ink-strong); }
+  .malhaus-cell input{ width:100%; border:none; background:transparent; text-align:center; font-family:'Space Mono',monospace; font-weight:700; font-size:1rem; color:var(--ink-strong); }
+  .malhaus-cell input:focus{ outline:none; background:var(--paper-alt); }
+
+  .extra-note{ font-size:0.78rem; color:var(--ink-soft); margin:-4px 2px 14px; }
+
   .submit-btn{
     margin-top:20px; width:100%; padding:13px; border:none; border-radius:12px;
     background:var(--ink); color:#fff; font-family:'Lexend'; font-weight:700; font-size:1rem; cursor:pointer;
@@ -246,6 +267,8 @@ const CATEGORY_META = {
   divrest:   { label: "Geteilt mit Rest", icon: "🔟", short: "Rest" },
   gleichung: { label: "Gleichungen & Ungleichungen", icon: "🔍", short: "Gleichungen" },
   sachaufgabe: { label: "Sachaufgaben", icon: "📖", short: "Sachaufgaben" },
+  zahlenmauer: { label: "Zahlenmauern", icon: "🧱", short: "Zahlenmauern" },
+  malhaus: { label: "Malhäuser", icon: "🏠", short: "Malhäuser" },
 };
 
 let uid = 1;
@@ -479,6 +502,51 @@ function genUngleichung() {
   ], { inputType: "choice", options: ["<", ">", "="] });
 }
 
+// ---------- Zusatz: Zahlenmauer (nicht Teil der Prüfungssimulation) ----------
+function genZahlenmauer(opts = {}) {
+  let b1, b2, b3, m1, m2, top;
+  do {
+    b2 = randInt(4, 26);
+    b1 = randInt(4, 35);
+    b3 = randInt(4, 35);
+    m1 = b1 + b2;
+    m2 = b2 + b3;
+    top = m1 + m2;
+  } while (top > 100 || top < 30 || m1 > 99 || m2 > 99);
+
+  const side = opts.side || pick(["left", "right"]);
+  const cells = { top, midLeft: m1, midRight: m2, botLeft: b1, botMid: b2, botRight: b3 };
+  const knownKeys = side === "right" ? ["top", "midRight", "botRight"] : ["top", "midLeft", "botLeft"];
+  const unknownKeys = side === "right" ? ["botMid", "midLeft", "botLeft"] : ["botMid", "midRight", "botRight"];
+  const steps = side === "right"
+    ? [
+        `Unten Mitte: ${m2} - ${b3} = ${b2}`,
+        `Mitte links: ${top} - ${m2} = ${m1}`,
+        `Unten links: ${m1} - ${b2} = ${b1}`,
+      ]
+    : [
+        `Unten Mitte: ${m1} - ${b1} = ${b2}`,
+        `Mitte rechts: ${top} - ${m1} = ${m2}`,
+        `Unten rechts: ${m2} - ${b2} = ${b3}`,
+      ];
+  const answer = {}; unknownKeys.forEach(k => { answer[k] = cells[k]; });
+  return task("zahlenmauer", "Fülle die Zahlenmauer aus.", answer, steps, {
+    inputType: "pyramid", cells, knownKeys, unknownKeys,
+  });
+}
+
+// ---------- Zusatz: Malhaus (nicht Teil der Prüfungssimulation) ----------
+function genMalhaus() {
+  const m = randInt(2, 10);
+  const pool = shuffle([2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  const factors = pool.slice(0, 4).sort((a, b) => a - b);
+  const products = factors.map(f => f * m);
+  const steps = factors.map((f, i) => `${f} · ${m} = ${products[i]}`);
+  return task("malhaus", `Fülle das Malhaus aus.`, products, steps, {
+    inputType: "malhaus", m, factors,
+  });
+}
+
 // ---------- 7. Sachaufgaben ----------
 const NAMES = ["Lena", "Finn", "Mia", "Leon", "Emma", "Noah", "Ada", "Paul"];
 const SACHAUFGABEN = [
@@ -577,13 +645,22 @@ function generateTask(category) {
     case "divrest": return genDivRest();
     case "gleichung": return Math.random() < 0.4 ? genUngleichung() : genGleichung();
     case "sachaufgabe": return genSachaufgabe();
+    case "zahlenmauer": return genZahlenmauer();
+    case "malhaus": return genMalhaus();
     default: throw new Error("unknown category " + category);
   }
 }
 
 function checkAnswer(t, userAnswer) {
-  if (t.inputType === "divrest" || (t.answer && typeof t.answer === "object")) {
+  if (t.inputType === "divrest") {
     return Number(userAnswer.quotient) === t.answer.quotient && Number(userAnswer.rest) === t.answer.rest;
+  }
+  if (t.inputType === "pyramid") {
+    return t.unknownKeys.every(k => Number(userAnswer[k]) === t.answer[k]);
+  }
+  if (t.inputType === "malhaus") {
+    return Array.isArray(userAnswer) && userAnswer.length === t.answer.length &&
+      userAnswer.every((v, i) => Number(v) === t.answer[i]);
   }
   if (typeof t.answer === "string") {
     return String(userAnswer).trim() === t.answer;
@@ -689,10 +766,12 @@ function tileMeta(catId){
 }
 
 const CAT_ORDER = ['addsub','muldiv','fachbegriff','punktstrich','divrest','gleichung','sachaufgabe'];
+const EXTRA_CAT_ORDER = ['zahlenmauer','malhaus'];
 const CAT_EXAMPLE = {
   addsub: '56 − 19 = ?', muldiv: '7 · 8 = ?', fachbegriff: 'Berechne die Summe aus …',
   punktstrich: 'Bilde das Produkt … und verdoppele es.', divrest: '43 : 8 = ? R ?',
   gleichung: 'Die Summe ist 58. Wie heißt die Zahl?', sachaufgabe: 'Rechnen + Antwortsatz',
+  zahlenmauer: 'Steine ergänzen, jeder Stein = Summe darunter', malhaus: 'Ein Malhaus komplett ausfüllen',
 };
 
 function renderHome(){
@@ -717,17 +796,21 @@ function renderHome(){
       </div>
     </div>
 
-    <div class="section-label">Einzeln üben</div>
+    <div class="section-label">Einzeln üben (Prüfungsthemen)</div>
     <div class="grid" id="cat-grid"></div>
+
+    <div class="section-label">Zusatzübungen</div>
+    <div class="extra-note">Gute Übung, aber nicht Teil der Prüfungssimulation.</div>
+    <div class="grid" id="extra-grid"></div>
 
     <div class="section-label">Mehr</div>
     <div class="grid">
       <div class="card tile" id="tile-ref">
-        <div class="banner"><div class="badge">8</div><div class="name">Spickzettel</div><div class="icon">📋</div></div>
+        <div class="banner"><div class="badge">10</div><div class="name">Spickzettel</div><div class="icon">📋</div></div>
         <div class="body"><div class="ex">Fachbegriffe, Punkt-vor-Strich, Rest, Gleichungen auf einen Blick</div></div>
       </div>
       <div class="card tile" id="tile-koerper">
-        <div class="banner"><div class="badge">9</div><div class="name">Körper</div><div class="icon">🧊</div></div>
+        <div class="banner"><div class="badge">11</div><div class="name">Körper</div><div class="icon">🧊</div></div>
         <div class="body"><div class="ex">Würfel, Quader, Kugel & Co. + Würfelnetze-Werkstatt</div></div>
       </div>
     </div>
@@ -747,6 +830,22 @@ function renderHome(){
       </div>`;
     div.addEventListener('click', () => startDrill(catId));
     grid.appendChild(div);
+  });
+
+  const extraGrid = document.getElementById('extra-grid');
+  EXTRA_CAT_ORDER.forEach((catId, i) => {
+    const meta = CATEGORY_META[catId];
+    const tm = tileMeta(catId);
+    const div = document.createElement('div');
+    div.className = 'card tile';
+    div.innerHTML = `
+      <div class="banner"><div class="badge">${CAT_ORDER.length + i + 1}</div><div class="name">${meta.short}</div><div class="icon">${meta.icon}</div></div>
+      <div class="body">
+        <div class="ex">${CAT_EXAMPLE[catId]}</div>
+        <span class="pill ${tm.cls}">${tm.label}</span>
+      </div>`;
+    div.addEventListener('click', () => startDrill(catId));
+    extraGrid.appendChild(div);
   });
 
   document.getElementById('hero').addEventListener('click', startExam);
@@ -803,7 +902,32 @@ function isEquationPrompt(t){
 
 function renderAnswerArea(t){
   const area = document.getElementById('answerArea');
-  if(t.inputType === 'divrest'){
+  if(t.inputType === 'pyramid'){
+    const c = t.cells;
+    const cellHtml = (key) => t.knownKeys.includes(key)
+      ? `<div class="brick known">${c[key]}</div>`
+      : `<div class="brick"><input data-key="${key}" inputmode="numeric" pattern="[0-9]*"></div>`;
+    area.innerHTML = `
+      <div class="pyramid">
+        <div class="pyramid-row">${cellHtml('top')}</div>
+        <div class="pyramid-row">${cellHtml('midLeft')}${cellHtml('midRight')}</div>
+        <div class="pyramid-row">${cellHtml('botLeft')}${cellHtml('botMid')}${cellHtml('botRight')}</div>
+      </div>
+      <button class="submit-btn" id="submitBtn">Prüfen</button>
+    `;
+  } else if(t.inputType === 'malhaus'){
+    area.innerHTML = `
+      <div class="malhaus-roof"><span>&middot; ${t.m}</span></div>
+      <div class="malhaus-table">
+        ${t.factors.map((f,i) => `
+          <div class="malhaus-row">
+            <div class="malhaus-cell factor">${f}</div>
+            <div class="malhaus-cell"><input data-idx="${i}" inputmode="numeric" pattern="[0-9]*"></div>
+          </div>`).join('')}
+      </div>
+      <button class="submit-btn" id="submitBtn">Prüfen</button>
+    `;
+  } else if(t.inputType === 'divrest'){
     area.innerHTML = `
       <div class="answer-row">
         <div><span class="ans-label">Ergebnis</span><input class="ans" id="a1" inputmode="numeric" pattern="[0-9]*"></div>
@@ -836,16 +960,22 @@ function renderAnswerArea(t){
 
 function submitAnswer(t){
   let userAnswer;
-  if(t.inputType === 'divrest'){
+  if(t.inputType === 'pyramid'){
+    userAnswer = {};
+    t.unknownKeys.forEach(k => { userAnswer[k] = document.querySelector(`input[data-key="${k}"]`).value; });
+  } else if(t.inputType === 'malhaus'){
+    userAnswer = t.factors.map((_, i) => document.querySelector(`input[data-idx="${i}"]`).value);
+  } else if(t.inputType === 'divrest'){
     userAnswer = { quotient: document.getElementById('a1').value, rest: document.getElementById('a2').value };
   } else if(t.inputType === 'choice'){
     userAnswer = window.__getSelected ? window.__getSelected() : null;
   } else {
     userAnswer = document.getElementById('a1').value;
   }
-  if(userAnswer === null || userAnswer === '' || (typeof userAnswer === 'object' && (userAnswer.quotient === '' || userAnswer.rest === ''))){
-    return;
-  }
+  const incomplete = userAnswer === null || userAnswer === ''
+    || (Array.isArray(userAnswer) && userAnswer.some(v => v === ''))
+    || (!Array.isArray(userAnswer) && typeof userAnswer === 'object' && Object.values(userAnswer).some(v => v === ''));
+  if(incomplete) return;
   const correct = t.category === 'koerper' ? String(userAnswer) === t.answer : checkAnswer(t, userAnswer);
   route.results.push({ category: t.category, correct });
   if(t.category !== 'koerper') bumpCat(t.category, correct);
@@ -861,7 +991,7 @@ function submitAnswer(t){
     </div>
   `;
   document.getElementById('submitBtn').disabled = true;
-  document.querySelectorAll('.ans, .choice-btn').forEach(el => el.disabled = true);
+  document.querySelectorAll('#answerArea input, .choice-btn').forEach(el => el.disabled = true);
   document.getElementById('nextBtn').addEventListener('click', () => {
     if(route.idx + 1 >= route.tasks.length){
       go({ view:'summary', mode: route.mode, results: route.results });
@@ -927,7 +1057,7 @@ function renderReference(){
   app.innerHTML = `
     <div class="practice-head"><button class="back" id="backBtn">&larr; Zurück</button><div></div></div>
     <div class="card">
-      <div class="banner"><div class="badge">8</div><div class="name">Spickzettel</div><div class="icon">📋</div></div>
+      <div class="banner"><div class="badge">10</div><div class="name">Spickzettel</div><div class="icon">📋</div></div>
       <div class="body" style="padding:16px 18px 20px;">
         <dl class="reference">
           <dt>Fachbegriffe</dt>
@@ -960,7 +1090,7 @@ function renderKoerperHub(){
   app.innerHTML = `
     <div class="practice-head"><button class="back" id="backBtn">&larr; Zurück</button><div></div></div>
     <div class="card" style="margin-bottom:16px;">
-      <div class="banner"><div class="badge">9</div><div class="name">Körper</div><div class="icon">🧊</div></div>
+      <div class="banner"><div class="badge">11</div><div class="name">Körper</div><div class="icon">🧊</div></div>
       <div class="body" style="padding:14px 16px 18px;">
         <p style="margin:0 0 4px;color:var(--ink-soft);font-size:0.9rem;">Würfel, Quader, Kugel, Zylinder, Kegel, Pyramide – Ecken, Kanten, Flächen erkennen.</p>
       </div>

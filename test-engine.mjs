@@ -1,4 +1,4 @@
-import { genAddSub, genMulDiv, genFachbegriff, genPunktStrich, genDivRest, genGleichung, genUngleichung, genSachaufgabe, checkAnswer } from "./engine.js";
+import { genAddSub, genMulDiv, genFachbegriff, genPunktStrich, genDivRest, genGleichung, genUngleichung, genSachaufgabe, genZahlenmauer, genMalhaus, checkAnswer } from "./engine.js";
 
 let checks = 0, failures = [];
 function assert(cond, msg) {
@@ -86,6 +86,32 @@ for (let i = 0; i < N; i++) {
   } else {
     assert(typeof t.answer === "number", "sachaufgabe numeric answer " + t.prompt);
   }
+}
+
+for (let i = 0; i < N; i++) {
+  const t = genZahlenmauer();
+  const c = t.answer; // { ...unknownKeys: value }
+  const cells = t.cells;
+  // jede Zelle muss aus den beiden Steinen darunter berechnet werden können
+  assert(cells.midLeft === cells.botLeft + cells.botMid, `zahlenmauer midLeft ${JSON.stringify(cells)}`);
+  assert(cells.midRight === cells.botMid + cells.botRight, `zahlenmauer midRight ${JSON.stringify(cells)}`);
+  assert(cells.top === cells.midLeft + cells.midRight, `zahlenmauer top ${JSON.stringify(cells)}`);
+  assert(Object.values(cells).every(v => Number.isInteger(v) && v > 0 && v <= 100), `zahlenmauer cell range ${JSON.stringify(cells)}`);
+  assert(t.knownKeys.length === 3 && t.unknownKeys.length === 3, "zahlenmauer 3 known + 3 unknown");
+  assert(new Set([...t.knownKeys, ...t.unknownKeys]).size === 6, "zahlenmauer keys cover all 6 cells");
+  t.unknownKeys.forEach(k => assert(c[k] === cells[k], `zahlenmauer answer matches cells for ${k}`));
+  assert(checkAnswer(t, c), "zahlenmauer checkAnswer correct");
+  const wrong = { ...c }; wrong[t.unknownKeys[0]] = cells[t.unknownKeys[0]] + 1;
+  assert(!checkAnswer(t, wrong), "zahlenmauer checkAnswer rejects wrong value");
+}
+
+for (let i = 0; i < N; i++) {
+  const t = genMalhaus();
+  assert(t.factors.length === 4 && new Set(t.factors).size === 4, "malhaus 4 distinct factors " + t.factors);
+  t.factors.forEach((f, idx) => assert(f * t.m === t.answer[idx], `malhaus product ${f}*${t.m} = ${t.answer[idx]}`));
+  assert(checkAnswer(t, t.answer), "malhaus checkAnswer correct");
+  const wrong = [...t.answer]; wrong[0] = wrong[0] + 1;
+  assert(!checkAnswer(t, wrong), "malhaus checkAnswer rejects wrong value");
 }
 
 console.log(`${checks} Prüfungen gelaufen, ${failures.length} Fehler.`);
